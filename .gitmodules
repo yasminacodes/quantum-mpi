@@ -1,0 +1,3 @@
+[submodule "cunqa"]
+	path = cunqa
+	url = git@github.com:CESGA-Quantum-Spain/cunqa.git
