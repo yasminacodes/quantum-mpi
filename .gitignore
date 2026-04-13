@@ -42,3 +42,5 @@
 
 build/
 build-*/
+run/
+qraise_*

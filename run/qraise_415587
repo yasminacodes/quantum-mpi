@@ -1,7 +1,0 @@
-slurmstepd: info: Setting TMPDIR to /scratch/415587. Previous errors about TMPDIR can be discarded
-/home/cesga/tec_app1/bin/setup_qpus: error while loading shared libraries: libmkl_intel_lp64.so.2: cannot open shared object file: No such file or directory
-/home/cesga/tec_app1/bin/setup_qpus: error while loading shared libraries: libmkl_intel_lp64.so.2: cannot open shared object file: No such file or directory
-/home/cesga/tec_app1/bin/setup_qpus: error while loading shared libraries: libmkl_intel_lp64.so.2: cannot open shared object file: No such file or directory
-/home/cesga/tec_app1/bin/setup_qpus: error while loading shared libraries: libmkl_intel_lp64.so.2: cannot open shared object file: No such file or directory
-srun: error: c7-3: tasks 0-3: Exited with exit code 127
-srun: Terminating StepId=415587.0
