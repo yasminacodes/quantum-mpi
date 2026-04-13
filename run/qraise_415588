@@ -1,0 +1,15 @@
+slurmstepd: info: Setting TMPDIR to /scratch/415588. Previous errors about TMPDIR can be discarded
+(04/13/26 06:34:59 PM) [QPU 415588_0] debug: Raising QPU without communications.  0ms
+(04/13/26 06:34:59 PM) [QPU 415588_0] debug: QPU going to turn on with AerSimpleSimulator.  0ms
+(04/13/26 06:34:59 PM) [QPU 415588_1] debug: Raising QPU without communications.  0ms
+(04/13/26 06:34:59 PM) [QPU 415588_1] debug: QPU going to turn on with AerSimpleSimulator.  0ms
+(04/13/26 06:34:59 PM) [QPU 415588_2] debug: Raising QPU without communications.  0ms
+(04/13/26 06:34:59 PM) [QPU 415588_2] debug: QPU going to turn on with AerSimpleSimulator.  0ms
+(04/13/26 06:34:59 PM) [QPU 415588_3] debug: Raising QPU without communications.  0ms
+(04/13/26 06:34:59 PM) [QPU 415588_3] debug: QPU going to turn on with AerSimpleSimulator.  0ms
+(04/13/26 06:34:59 PM) [QPU 415588_2] debug: Server bound to tcp://10.5.7.3:40233  14ms
+(04/13/26 06:34:59 PM) [QPU 415588_3] debug: Server bound to tcp://10.5.7.3:38377  14ms
+(04/13/26 06:34:59 PM) [QPU 415588_0] debug: Server bound to tcp://10.5.7.3:32819  14ms
+(04/13/26 06:34:59 PM) [QPU 415588_1] debug: Server bound to tcp://10.5.7.3:37485  14ms
+(04/13/26 06:35:00 PM) [QPU 415588_1] debug: Aer usual simulation  1415ms
+(04/13/26 06:35:00 PM) [QPU 415588_1] debug: Aer usual simulation  26ms
