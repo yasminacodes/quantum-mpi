@@ -1,30 +1,37 @@
 # quantum-mpi
-This code belongs to Yasmina Gonzalez Almon (hola@yasminacodes) and it's a work in progress for a master's thesis in HPC and Quantum Computing.
+This code belongs to Yasmina Gonzalez Almon (hola@yasminacodes) and it is a work in progress for a master's thesis in HPC and Quantum Computing.
 
-This project builds a generic Quantum MPI library in C++, and can execute programs in QMIO/CESGA using CUNQA.
+This project builds a Quantum MPI library in C++, and can execute programs in QMIO.CESGA using CUNQA.
+
+Layered flow used by the project:
+`examples/src -> quantum_mpi (optional) -> quantum_circuit -> cunqa_api -> CUNQA`
 
 Project structure:
-* `lib/quantum_circuit`: build quantum circuits and export raw JSON.
-* `lib/quantum_mpi`: generic orchestration layer (launcher, endpoint resolver, transport).
-* `src/main.cpp`: default executable (`quantum_mpi_main`).
-* `launch_cunqa_program.sh`: launcher to compile+run a generic program with CUNQA in QMIO.
+* `lib/utils`: shared helper functions (command execution, parsing, string helpers).
+* `lib/cunqa_api`: thin adapter to compiled CUNQA (qraise/qdrop, endpoint resolution, payload send/recv).
+* `lib/quantum_circuit`: quantum circuit builder and raw JSON export.
+* `lib/quantum_mpi`: MPI-like orchestration layer built on top of `quantum_circuit` + `cunqa_api`.
+* `src/simple_telegate.cpp`: basic telegate example.
+* `src/distributed_qft.cpp`: distributed QFT benchmark example.
+* `configure.sh`: helper script to configure+compile with CUNQA in QMIO.
+* `run.sh`: helper script to execute a compiled binary with QMIO runtime setup.
 
 ## Quick start (QMIO + CUNQA)
-This is the main workflow in HPC.
+This is the main HPC workflow.
 
-### 1) Get the code and submodules
+### 1) Get code and submodules
 ```bash
 git submodule update --init --recursive
 ```
 
 ### 2) Compile CUNQA in QMIO
-CUNQA is a emulator of distributed quantum computing for HPC environments, and it's the tool this project will use to implement and test a estandar library for quantum MPI.
+CUNQA is an emulator of distributed quantum computing for HPC environments.
 
-The documentation for CUNQA can be found [here](https://cesga-quantum-spain.github.io/cunqa/).
+Official documentation:
+* https://cesga-quantum-spain.github.io/cunqa/
+* https://github.com/CESGA-Quantum-Spain/cunqa
 
-When the files are available, QUNCA can be compilled following the official instructions available [here](https://github.com/CESGA-Quantum-Spain/cunqa#).
-
-If you are executing this on the CESGA quantum supercomputer QMIO, you can copy and paste the following commands:
+QMIO setup example:
 ```bash
 module purge
 module load qmio/hpc
@@ -47,49 +54,56 @@ git config --global --add url."https://github.com/".insteadOf ssh://git@github.c
 
 cmake -B build/ -DCMAKE_PREFIX_INSTALL=.
 cmake --build build/ --parallel $(nproc)
+# Optional GPU build:
 cmake -B build/ -DCMAKE_PREFIX_INSTALL=. -DAER_GPU=TRUE
 
 cd ..
 ```
 
-### 3) Execute a program with CUNQA (recommended)
-Use the launcher script. By default it only executes `quantum_mpi_main` (from `src/main.cpp`).
-
+### 3) Build and run with CUNQA (recommended)
+Compile and run tests:
 ```bash
-bash launch_cunqa_program.sh
+./configure.sh
 ```
 
-Compile + execute in one command:
+Run a basic telegate program:
 ```bash
-bash launch_cunqa_program.sh --build
+./run.sh simple_telegate
 ```
 
-Execute another program (binary name inside `build-qmio/`):
+Run distributed QFT benchmark:
 ```bash
-bash launch_cunqa_program.sh my_program
+./run.sh distributed_qft --qpus 2 --qubits 4 --shots 1024 --repetitions 3
 ```
 
-Execute by full path:
+Notes:
+* In CUNQA mode, circuit transport is handled by `lib/cunqa_api` (using compiled CUNQA client/ZMQ libs) and results are returned by the simulator backend.
+* `run.sh` launches in background by default. Use foreground mode for live output:
 ```bash
-bash launch_cunqa_program.sh /path/to/my_binary
+QUANTUM_MPI_DETACH=0 QUANTUM_MPI_VERBOSE=1 ./run.sh simple_telegate
+```
+* Program stdout/stderr is always written to `run/<execution>/launcher.log`.
+* If Slurm keeps jobs in `PENDING`, endpoint resolution can timeout. You can increase wait time:
+```bash
+QUANTUM_MPI_ENDPOINT_TIMEOUT_SECONDS=600 ./run.sh
 ```
 
-Pass runtime args to the program:
+Run another binary inside `build-qmio/`:
 ```bash
-bash launch_cunqa_program.sh quantum_mpi_main qraise -n 8 -t 00:20:00 --co-located
+./run.sh my_program
 ```
 
-What the script does:
-* loads QMIO runtime modules
-* checks CUNQA runtime dependencies (`setup_qpus`)
-* if `--build` is used, configures/builds with CUNQA integration (`build-qmio/`)
-* creates `run/` if it does not exist
-* runs the program inside `run/`
-* extracts the Slurm job id from program output and resolves the real `StdOut` path
-* exposes `run/qraise_XXXX` (real file or symlink) so you always have one stable path to inspect
+Run by full path:
+```bash
+./run.sh /path/to/my_binary
+```
 
-### 4) Execute qraise directly in QMIO (manual mode)
-If you want to launch vQPUs manually first:
+Pass runtime args to a program:
+```bash
+./run.sh distributed_qft --qpus 4 --qubits 8 --shots 2048 --repetitions 5
+```
+
+### 4) Manual qraise mode in QMIO (optional)
 ```bash
 module purge
 module load qmio/hpc
@@ -103,47 +117,43 @@ export PATH="$HOME/bin:$PATH"
 export STORE="${STORE:-/mnt/netapp1/Store_CESGA/${HOME#/}}"
 mkdir -p "$STORE/.cunqa/logs"
 if [ ! -f "$STORE/.cunqa/qpus.json" ]; then
-  echo "{}" > "$STORE/.cunqa/qpus.json"
+  echo "[]" > "$STORE/.cunqa/qpus.json"
 fi
 
 qraise -n 4 -t 01:00:00 --co-located
 ```
 
-To clean resources after tests:
+Cleanup:
 ```bash
 qdrop --all
 ```
 
-## Alternative: compile quantum-mpi without CUNQA
-Use this for generic development/testing of the libraries.
+## Development and testing without CUNQA (local/non-HPC)
+Use this mode for regular development and unit tests.
 
+Warning: this method has not been tested.
+
+### Configure, build and test
 ```bash
 cmake -S . -B build
 cmake --build build --parallel $(nproc)
 ctest --test-dir build --output-on-failure
 ```
 
-This builds:
-* `quantum_circuit`
-* `quantum_mpi`
-* unit tests (`quantum_circuit_json_tests`, `quantum_mpi_tests`)
-* `quantum_mpi_main` in generic mode (no CUNQA runtime)
+Generated targets include:
+* libraries: `utils`, `cunqa_api`, `quantum_circuit`, `quantum_mpi`
+* tests: `quantum_circuit_json_tests`, `quantum_mpi_tests`
+* executables: `simple_telegate`, `distributed_qft`
 
-## Regular PC (non-HPC)
-This section is for a normal workstation.
-
-### 1) Run quantum-mpi in generic mode
+### Run developed code in generic mode
 ```bash
-cmake -S . -B build
-cmake --build build --parallel $(nproc)
-ctest --test-dir build --output-on-failure
-./build/quantum_mpi_main
+./build/simple_telegate
 ```
 
-In generic mode, `quantum_mpi_main` exits with a message indicating CUNQA integration is disabled.
+In generic mode (without CUNQA runtime available), examples may compile but they will not launch real vQPUs. For real distributed execution, build with `-DQUANTUM_MPI_ENABLE_CUNQA_INTEGRATION=ON` and use the QMIO/CUNQA workflow.
 
-### 2) Compile CUNQA locally (optional)
-Possible, but you must provide dependencies manually (compiler, MPI/OpenMP stack, Python, pybind11, Boost, Eigen, nlohmann_json, etc.). This method has not been tested yet.
+## Compile CUNQA locally (optional)
+Possible, but dependencies must be provided manually (compiler, MPI/OpenMP stack, Python, pybind11, Boost, Eigen, nlohmann_json, etc.).
 
 ```bash
 cd cunqa

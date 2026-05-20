@@ -8,109 +8,94 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 
 include(CTest)
+
 find_package(Threads REQUIRED)
+find_package(nlohmann_json REQUIRED)
+
+function(quantum_mpi_append_compiler_runtime_rpath target_name)
+    set(_runtime_dirs)
+
+    foreach(_runtime_lib IN ITEMS libstdc++.so libgcc_s.so.1)
+        execute_process(
+            COMMAND "${CMAKE_CXX_COMPILER}" -print-file-name=${_runtime_lib}
+            OUTPUT_VARIABLE _runtime_path
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+
+        if(_runtime_path
+           AND NOT _runtime_path STREQUAL "${_runtime_lib}"
+           AND EXISTS "${_runtime_path}")
+            get_filename_component(_runtime_dir "${_runtime_path}" DIRECTORY)
+            list(APPEND _runtime_dirs "${_runtime_dir}")
+        endif()
+    endforeach()
+
+    list(REMOVE_DUPLICATES _runtime_dirs)
+
+    if(_runtime_dirs)
+        set_property(TARGET ${target_name} APPEND PROPERTY BUILD_RPATH "${_runtime_dirs}")
+        message(STATUS "Added compiler runtime RPATH for ${target_name}: ${_runtime_dirs}")
+    endif()
+endfunction()
 
 option(
     QUANTUM_MPI_ENABLE_CUNQA_INTEGRATION
-    "Build quantum_mpi_main with CUNQA-specific launcher/endpoint/transport."
-    OFF
+    "Build CUNQA integration components."
+    ON
 )
+
 set(
-    QUANTUM_MPI_CUNQA_SOURCE_DIR
+    QUANTUM_MPI_CUNQA_ROOT_DIR
     "${CMAKE_CURRENT_SOURCE_DIR}/cunqa"
     CACHE PATH
-    "Path to CUNQA source tree."
+    "Path to CUNQA checkout (used only to locate headers/build artifacts)."
 )
+
 set(
-    QUANTUM_MPI_ZMQ_INCLUDE_DIR
-    ""
+    QUANTUM_MPI_CUNQA_BUILD_DIR
+    "${QUANTUM_MPI_CUNQA_ROOT_DIR}/build"
     CACHE PATH
-    "Path containing zmq.hpp (required for CUNQA integration)."
+    "Path to an already compiled CUNQA build directory."
 )
+
 set(
-    QUANTUM_MPI_ZMQ_LIBRARY
-    ""
-    CACHE FILEPATH
-    "Path to libzmq shared/static library (required for CUNQA integration)."
-)
-set(
-    QUANTUM_MPI_SPDLOG_INCLUDE_DIR
-    ""
+    QUANTUM_MPI_CUNQA_INCLUDE_DIR
+    "${QUANTUM_MPI_CUNQA_ROOT_DIR}/src"
     CACHE PATH
-    "Path containing spdlog headers (required for CUNQA integration)."
-)
-
-add_subdirectory(lib/quantum_circuit)
-add_subdirectory(lib/quantum_mpi)
-
-add_executable(quantum_mpi_main
-    src/main.cpp
-)
-
-target_include_directories(quantum_mpi_main
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
-
-target_link_libraries(quantum_mpi_main
-    PRIVATE
-        quantum_circuit
-        quantum_mpi
-        Threads::Threads
+    "Path containing CUNQA headers (must include comm/client.hpp)."
 )
 
 if(QUANTUM_MPI_ENABLE_CUNQA_INTEGRATION)
-    if(NOT EXISTS "${QUANTUM_MPI_CUNQA_SOURCE_DIR}/src/comm/client.hpp")
-        message(FATAL_ERROR
-            "CUNQA integration is ON but no valid CUNQA source tree was found.\n"
-            "Set -DQUANTUM_MPI_CUNQA_SOURCE_DIR=/path/to/cunqa."
-        )
-    endif()
-
-    if(NOT QUANTUM_MPI_ZMQ_INCLUDE_DIR)
-        find_path(QUANTUM_MPI_ZMQ_INCLUDE_DIR zmq.hpp)
-    endif()
-    if(NOT QUANTUM_MPI_ZMQ_LIBRARY)
-        find_library(QUANTUM_MPI_ZMQ_LIBRARY NAMES zmq)
-    endif()
-    if(NOT QUANTUM_MPI_SPDLOG_INCLUDE_DIR)
-        find_path(QUANTUM_MPI_SPDLOG_INCLUDE_DIR spdlog/spdlog.h)
-    endif()
-
-    if(NOT QUANTUM_MPI_ZMQ_INCLUDE_DIR OR NOT QUANTUM_MPI_ZMQ_LIBRARY)
-        message(FATAL_ERROR
-            "CUNQA integration requires ZeroMQ C++ headers (zmq.hpp) and libzmq."
-        )
-    endif()
-
-    if(NOT QUANTUM_MPI_SPDLOG_INCLUDE_DIR)
-        message(FATAL_ERROR
-            "CUNQA integration requires spdlog headers (spdlog/spdlog.h)."
-        )
-    endif()
-
-    target_sources(quantum_mpi_main
-        PRIVATE
-            ${QUANTUM_MPI_CUNQA_SOURCE_DIR}/src/comm/comm_impl/zmq/zmq_client.cpp
-    )
-
-    target_include_directories(quantum_mpi_main
-        PRIVATE
-            ${QUANTUM_MPI_CUNQA_SOURCE_DIR}/src
-            ${QUANTUM_MPI_CUNQA_SOURCE_DIR}/src/utils/logger
-            ${QUANTUM_MPI_ZMQ_INCLUDE_DIR}
-            ${QUANTUM_MPI_SPDLOG_INCLUDE_DIR}
-    )
-
-    target_link_libraries(quantum_mpi_main
-        PRIVATE
-            ${QUANTUM_MPI_ZMQ_LIBRARY}
-    )
-
-    target_compile_definitions(quantum_mpi_main PRIVATE QUANTUM_MPI_WITH_CUNQA=1)
-else()
-    target_compile_definitions(quantum_mpi_main PRIVATE QUANTUM_MPI_WITH_CUNQA=0)
+    message(STATUS "CUNQA root dir: ${QUANTUM_MPI_CUNQA_ROOT_DIR}")
+    message(STATUS "CUNQA build dir: ${QUANTUM_MPI_CUNQA_BUILD_DIR}")
+    message(STATUS "CUNQA include dir: ${QUANTUM_MPI_CUNQA_INCLUDE_DIR}")
 endif()
 
-target_compile_options(quantum_mpi_main PRIVATE -fno-lto)
-target_link_options(quantum_mpi_main PRIVATE -fno-lto)
+add_subdirectory(lib)
+
+if(QUANTUM_MPI_ENABLE_CUNQA_INTEGRATION)
+    function(quantum_mpi_add_example target_name source_file)
+        add_executable(${target_name}
+            ${source_file}
+        )
+
+        target_include_directories(${target_name}
+            PRIVATE
+                ${CMAKE_CURRENT_SOURCE_DIR}/src
+        )
+
+        target_link_libraries(${target_name}
+            PRIVATE
+                cunqa_api
+                quantum_circuit
+                quantum_mpi
+                Threads::Threads
+                nlohmann_json::nlohmann_json
+        )
+
+        quantum_mpi_append_compiler_runtime_rpath(${target_name})
+    endfunction()
+
+    quantum_mpi_add_example(simple_telegate src/simple_telegate.cpp)
+    quantum_mpi_add_example(distributed_qft src/distributed_qft.cpp)
+endif()

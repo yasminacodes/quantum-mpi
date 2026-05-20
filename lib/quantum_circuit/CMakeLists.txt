@@ -1,3 +1,9 @@
+cmake_minimum_required(VERSION 3.16)
+
+project(quantum_circuit LANGUAGES CXX)
+
+include(CTest)
+
 add_library(quantum_circuit STATIC
     src/quantum_circuit.cpp
 )
@@ -19,5 +25,18 @@ if(BUILD_TESTING)
             quantum_circuit
     )
 
-    add_test(NAME quantum_circuit_json_tests COMMAND quantum_circuit_json_tests)
+    if(COMMAND quantum_mpi_append_compiler_runtime_rpath)
+        quantum_mpi_append_compiler_runtime_rpath(quantum_circuit_json_tests)
+    endif()
+
+    add_test(
+        NAME quantum_circuit_json_tests
+        COMMAND quantum_circuit_json_tests
+    )
+
+    add_custom_target(check
+        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+        DEPENDS quantum_circuit_json_tests
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
 endif()
